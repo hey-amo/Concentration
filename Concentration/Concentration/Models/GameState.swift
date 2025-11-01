@@ -24,6 +24,7 @@ enum HapticType {
 }
 
 // MARK: - Game State
+// MARK: - Game State
 
 @Observable
 class GameState {
@@ -40,16 +41,6 @@ class GameState {
     let coordinator = GameCoordinator()
     
     private let animalEmojis = ["🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐨", "🐯"]
-    
-    deinit {
-        // Cancel timer immediately
-        timerTask?.cancel()
-        
-        // Note: Actor cleanup
-        // The GameCoordinator actor will be deallocated automatically
-        // when GameState is deallocated since there are no external
-        // references to it. Swift's actor model handles this.
-    }
     
     init() {
         setupNewGame()
@@ -68,7 +59,6 @@ class GameState {
         startTime = Date()
         
         // Create 10 pairs (20 cards) for 5x4 grid
-        print ("Creating cards...")
         var newCards: [Card] = []
         for (index, emoji) in animalEmojis.enumerated() {
             let pairId = UUID()
@@ -78,8 +68,7 @@ class GameState {
         
         // Shuffle
         cards = newCards.shuffled()
-        print ("Shuffled \(cards.count) cards")
-            
+        
         // Update positions after shuffle
         for (index, _) in cards.enumerated() {
             cards[index] = Card(
@@ -90,54 +79,89 @@ class GameState {
             )
         }
         
-        // Reset the coordinator
+        // Reset coordinator
         Task {
             await coordinator.reset()
         }
         
-        // Start the timer
+        // Start timer
         startTimer()
     }
     
-    private func endGame(won: Bool = false) {
-        isGameOver = true
-        gameWon = won
-        timerTask?.cancel()
-        
-        if won {
-            print ("Won... Calculating bonus")
-           // Calculate time bonus
-           let timeElapsed = 90 - timeRemaining
-           let multiplier = calculateTimeBonus(timeElapsed: timeElapsed)
-           score = Int(Double(score) * multiplier)
-           //playSound(.win)
-           //triggerHaptic(.success)
-       } else {
-           print ("Lost")
-           //playSound(.lose)
-           //triggerHaptic(.error)
-       }
-        
-        // Save game
-        //Task {
-        //    await PersistenceManager.shared.saveGame(self)
-        //}
-    }
-
-    
-    // MARK: Time Bonus
-    
-    private func calculateTimeBonus(timeElapsed: Int) -> Double {
-        switch timeElapsed {
-        case 0...20: return 3.0  // 3x bonus
-        case 21...30: return 2.5 // 2.5x bonus
-        case 31...45: return 2.0 // 2x bonus
-        case 46...60: return 1.5 // 1.5x bonus
-        default: return 1.0      // No bonus
+    @MainActor
+    func selectCard(_ card: Card) {
+        Task {
+            let canSelect = await coordinator.canSelectCard(card.id, currentState: cards)
+            guard canSelect else { return }
+            
+            // Flip card face up
+            if let index = cards.firstIndex(where: { $0.id == card.id }) {
+                cards[index].isFaceUp = true
+                flips += 1
+            }
+            
+            // Process selection
+            let result = await coordinator.selectCard(card.id)
+            
+            switch result {
+            case .selected:
+                // First card selected, wait for second
+                playSound(.cardFlip)
+                
+            case .matched(let baseScore):
+                // Check if cards match
+                let selectedIds = await coordinator.getSelectedCardIds()
+                if selectedIds.count == 2,
+                   let card1 = cards.first(where: { $0.id == selectedIds[0] }),
+                   let card2 = cards.first(where: { $0.id == selectedIds[1] }),
+                   card1.pairId == card2.pairId {
+                    // Match!
+                    handleMatch(card1: card1, card2: card2, baseScore: baseScore)
+                } else {
+                    // No match
+                    handleNoMatch(cardIds: selectedIds)
+                }
+                
+            case .noMatch:
+                break
+                
+            case .busy, .alreadySelected:
+                break
+            }
         }
     }
-
-    // MARK: Timer
+    
+    private func handleMatch(card1: Card, card2: Card, baseScore: Int) {
+        // Mark as matched
+        if let index1 = cards.firstIndex(where: { $0.id == card1.id }) {
+            cards[index1].isMatched = true
+        }
+        if let index2 = cards.firstIndex(where: { $0.id == card2.id }) {
+            cards[index2].isMatched = true
+        }
+        
+        score += baseScore
+        playSound(.match)
+        triggerHaptic(.success)
+        
+        // Check if game is won
+        if cards.allSatisfy({ $0.isMatched }) {
+            endGame(won: true)
+        }
+    }
+    
+    private func handleNoMatch(cardIds: [UUID]) {
+        Task {
+            // Flip cards back down
+            for cardId in cardIds {
+                if let index = cards.firstIndex(where: { $0.id == cardId }) {
+                    cards[index].isFaceUp = false
+                }
+            }
+            playSound(.noMatch)
+            triggerHaptic(.error)
+        }
+    }
     
     private func startTimer() {
         timerTask = Task { @MainActor in
@@ -154,26 +178,74 @@ class GameState {
             }
         }
     }
-
+    
     func pauseTimer() {
         timerTask?.cancel()
     }
-
+    
     func resumeTimer() {
         if !isGameOver && timeRemaining > 0 {
             startTimer()
         }
     }
     
-    // MARK: Audio & Haptics
+    private func endGame(won: Bool) {
+        isGameOver = true
+        gameWon = won
+        timerTask?.cancel()
+        
+        if won {
+            // Calculate time bonus
+            let timeElapsed = 90 - timeRemaining
+            let multiplier = calculateTimeBonus(timeElapsed: timeElapsed)
+            score = Int(Double(score) * multiplier)
+            playSound(.win)
+            triggerHaptic(.success)
+        } else {
+            playSound(.lose)
+            triggerHaptic(.error)
+        }
+        
+        // Save game
+        Task {
+            await PersistenceManager.shared.saveGame(self)
+        }
+    }
+    
+    private func calculateTimeBonus(timeElapsed: Int) -> Double {
+        switch timeElapsed {
+        case 0...20: return 3.0  // 3x bonus
+        case 21...30: return 2.5 // 2.5x bonus
+        case 31...45: return 2.0 // 2x bonus
+        case 46...60: return 1.5 // 1.5x bonus
+        default: return 1.0      // No bonus
+        }
+    }
+    
+    // MARK: - Audio & Haptics (Placeholder implementations)
     
     private func playSound(_ sound: SoundEffect) {
-       //Task.detached(priority: .background) {
-           // Implement audio playback here
-           // await AudioManager.shared.play(sound)
-       //}
+//        Task.detached(priority: .background) {
+//            // Implement audio playback here
+//            // await AudioManager.shared.play(sound)
+//        }
     }
     
     private func triggerHaptic(_ type: HapticType) {
+//        #if os(iOS)
+//        Task { @MainActor in
+//            switch type {
+//            case .success:
+//                let generator = UINotificationFeedbackGenerator()
+//                generator.notificationOccurred(.success)
+//            case .error:
+//                let generator = UINotificationFeedbackGenerator()
+//                generator.notificationOccurred(.error)
+//            case .light:
+//                let generator = UIImpactFeedbackGenerator(style: .light)
+//                generator.impactOccurred()
+//            }
+//        }
+//        #endif
     }
 }
