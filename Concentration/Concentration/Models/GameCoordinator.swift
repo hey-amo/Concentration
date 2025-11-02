@@ -82,6 +82,6 @@ actor GameCoordinator {
     }
 
     func getSelectedCardIds() -> [UUID] {
-        selectedCardIds
+        return selectedCardIds
     }
 }

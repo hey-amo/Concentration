@@ -24,6 +24,7 @@ enum HapticType {
 }
 
 /// Animal emojis used in the game
+/// animalEmojis = ["🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐨", "🐯"]
 enum Animal: String, Codable, CaseIterable {
     case dog = "🐶"
     case cat = "🐱"
@@ -51,13 +52,17 @@ class GameState {
     var timeRemaining: Int = 90
     var isGameOver: Bool = false
     var gameWon: Bool = false
+    var timerStarted: Bool = false
     
     private var startTime: Date?
     private var timerTask: Task<Void, Never>?
     
-    let coordinator = GameCoordinator()
+    let coordinator = GameCoordinator()    
     
-    private let animalEmojis = ["🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐨", "🐯"]
+    deinit {
+        timerTask?.cancel()
+        print("GameState deallocated, all tasks cancelled")
+    }
     
     init() {
         setupNewGame()
@@ -73,14 +78,15 @@ class GameState {
         timeRemaining = 90
         isGameOver = false
         gameWon = false
+        timerStarted = false
         startTime = Date()
         
         // Create 10 pairs (20 cards) for 5x4 grid
         var newCards: [Card] = []
-        for (index, emoji) in animalEmojis.enumerated() {
+        for (index, animal) in Animal.allCases.enumerated() {
             let pairId = UUID()
-            newCards.append(Card(emoji: emoji, pairId: pairId, position: index * 2))
-            newCards.append(Card(emoji: emoji, pairId: pairId, position: index * 2 + 1))
+            newCards.append(Card(animal: animal, pairId: pairId, position: index * 2))
+            newCards.append(Card(animal: animal, pairId: pairId, position: index * 2 + 1))
         }
         
         // Shuffle
@@ -90,7 +96,7 @@ class GameState {
         for (index, _) in cards.enumerated() {
             cards[index] = Card(
                 id: cards[index].id,
-                emoji: cards[index].emoji,
+                animal: cards[index].animal,
                 pairId: cards[index].pairId,
                 position: index
             )
@@ -100,9 +106,26 @@ class GameState {
         Task {
             await coordinator.reset()
         }
+
         
-        // Start timer
-        startTimer()
+        // Show all cards face up for 3 seconds on main thread
+        Task { @MainActor in
+            print("> New game started - showing all cards for 3 seconds <")
+            // Flip all cards face up
+            for index in cards.indices {
+                cards[index].isFaceUp = true
+            }
+            
+            // Wait 3 seconds
+           try? await Task.sleep(for: .seconds(3))
+           
+           // Flip all cards face down
+           for index in cards.indices {
+               cards[index].isFaceUp = false
+           }
+           
+           print("✅ Cards hidden - ready to play!")
+        }
     }
     
     @MainActor
@@ -111,11 +134,20 @@ class GameState {
             let canSelect = await coordinator.canSelectCard(card.id, currentState: cards)
             guard canSelect else { return }
             
+            // Start timer on first card flip
+            if !timerStarted {
+               timerStarted = true
+               startTimer()
+               print("⏱️ Timer started!")
+            }
+           
             // Flip card face up
             if let index = cards.firstIndex(where: { $0.id == card.id }) {
-                cards[index].isFaceUp = true
-                flips += 1
+               cards[index].isFaceUp = true
+               flips += 1
+               print("🃏 Flipped card: \(card.emoji) (Total flips: \(flips))")
             }
+           
             
             // Process selection
             let result = await coordinator.selectCard(card.id)
@@ -128,15 +160,22 @@ class GameState {
             case .matched(let baseScore):
                 // Check if cards match
                 let selectedIds = await coordinator.getSelectedCardIds()
+
                 if selectedIds.count == 2,
                    let card1 = cards.first(where: { $0.id == selectedIds[0] }),
-                   let card2 = cards.first(where: { $0.id == selectedIds[1] }),
-                   card1.pairId == card2.pairId {
-                    // Match!
-                    handleMatch(card1: card1, card2: card2, baseScore: baseScore)
-                } else {
-                    // No match
-                    handleNoMatch(cardIds: selectedIds)
+                   let card2 = cards.first(where: { $0.id == selectedIds[1] }) {
+                    
+                    print("🔍 Checking pair: \(card1.animal.emoji) vs \(card2.animal.emoji)")
+                    
+                    if card1.pairId == card2.pairId {
+                        // Match!
+                        print("✅ Pair found! Well done!")
+                        handleMatch(card1: card1, card2: card2, baseScore: baseScore)
+                    } else {
+                        // No match - flip cards back down
+                        print("❌ Not a pair")
+                        handleNoMatch(cardIds: selectedIds)
+                    }
                 }
                 
             case .noMatch:
@@ -168,11 +207,15 @@ class GameState {
     }
     
     private func handleNoMatch(cardIds: [UUID]) {
-        Task {
+        Task { @MainActor in
+            // Wait a moment for player to see both cards
+            try? await Task.sleep(for: .milliseconds(800))
+
             // Flip cards back down
             for cardId in cardIds {
                 if let index = cards.firstIndex(where: { $0.id == cardId }) {
                     cards[index].isFaceUp = false
+                    print("🔄 Flipping card back down: \(cards[index].animal.emoji)")
                 }
             }
             playSound(.noMatch)
@@ -201,7 +244,7 @@ class GameState {
     }
     
     func resumeTimer() {
-        if !isGameOver && timeRemaining > 0 {
+        if !isGameOver && timeRemaining > 0 && timerStarted {
             startTimer()
         }
     }

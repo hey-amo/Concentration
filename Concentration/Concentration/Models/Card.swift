@@ -9,18 +9,22 @@ import Foundation
 
 struct Card: Identifiable, Hashable, Equatable, Codable {
     let id: UUID
-    let emoji: String
+    let animal: Animal
     let pairId: UUID
     var isFaceUp: Bool
     var isMatched: Bool
     let position: Int
     
-    init(id: UUID = UUID(), emoji: String, pairId: UUID, isFaceUp: Bool = false, isMatched: Bool = false, position: Int) {
+    init(id: UUID = UUID(), animal: Animal, pairId: UUID, isFaceUp: Bool = false, isMatched: Bool = false, position: Int) {
         self.id = id
-        self.emoji = emoji
+        self.animal = animal
         self.pairId = pairId
         self.isFaceUp = isFaceUp
         self.isMatched = isMatched
         self.position = position
+    }
+    
+    var emoji: String {
+        return animal.emoji
     }
 }

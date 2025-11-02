@@ -30,7 +30,6 @@ struct SettingsView: View {
                 
                 Section("About") {
                     LabeledContent("Version", value: "1.0")
-                    LabeledContent("Built with", value: "SwiftUI & Concurrency")
                 }
             }
             .navigationTitle("Settings")
