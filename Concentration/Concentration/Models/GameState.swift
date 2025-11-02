@@ -23,7 +23,24 @@ enum HapticType {
     case success, error, light
 }
 
-// MARK: - Game State
+/// Animal emojis used in the game
+enum Animal: String, Codable, CaseIterable {
+    case dog = "🐶"
+    case cat = "🐱"
+    case mouse = "🐭"
+    case hamster = "🐹"
+    case rabbit = "🐰"
+    case fox = "🦊"
+    case bear = "🐻"
+    case panda = "🐼"
+    case koala = "🐨"
+    case tiger = "🐯"
+    
+    var emoji: String {
+        return self.rawValue
+    }
+}
+
 // MARK: - Game State
 
 @Observable
