@@ -44,16 +44,16 @@ class GameState {
         self.instanceID = UUID().uuidString.prefix(8).description
         print("🆕 GameState CREATED with ID: \(instanceID)")
         
-        // ✅ CRITICAL: Defer setup to avoid triggering observers during init
+        // CRITICAL: Defer setup to avoid triggering observers during init
         Task { @MainActor in
             self.setupNewGame()
         }
     }
     
     deinit {
-        print("💀 GameState \(instanceID) DEALLOCATED - THIS SHOULD ONLY HAPPEN WHEN CLOSING APP!")
+        print("GAMESTATE \(instanceID) DEALLOCATED")
         timerTask?.cancel()
-        print("🛑 All tasks cancelled for \(instanceID)")
+        print("> All tasks cancelled for \(instanceID) <")
     }
     
     func setupNewGame() {
@@ -97,7 +97,7 @@ class GameState {
         
         // Show all cards face up for 3 seconds
         Task { @MainActor in
-            print("🎮 New game started - showing all cards for 3 seconds")
+            print("New game started - showing all cards for 2 seconds")
             
             // Flip all cards face up (batch update - single mutation)
             cards = cards.map { card in
@@ -107,7 +107,7 @@ class GameState {
             }
             
             // Wait 3 seconds
-            try? await Task.sleep(for: .seconds(3))
+            try? await Task.sleep(for: .seconds(2))
             
             // Flip all cards face down (batch update - single mutation)
             cards = cards.map { card in
@@ -116,7 +116,7 @@ class GameState {
                 return updated
             }
             
-            print("✅ Cards hidden - ready to play!")
+            print("Cards hidden - ✅ Ready to play!")
         }
         
         // Timer will start on first card flip (see selectCard)
@@ -191,7 +191,7 @@ class GameState {
         }
         
         score += baseScore
-        print("💰 Score increased by \(baseScore), total score: \(score)")
+        print("Score increased by \(baseScore), total score: \(score)")
         playSound(.match)
         triggerHaptic(.success)
         
