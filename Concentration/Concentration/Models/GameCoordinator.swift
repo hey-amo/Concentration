@@ -65,7 +65,7 @@ actor GameCoordinator {
         let card1Id = selectedCardIds[0]
         let card2Id = selectedCardIds[1]
         
-        print("Processing card1: \(card1Id.uuidString) vs card2: \(card2Id.uuidString)")
+        print("Processing turn. card1: \(card1Id.uuidString) vs card2: \(card2Id.uuidString)")
         
         // Wait a moment for player to see both cards
         try? await Task.sleep(for: .milliseconds(800))
