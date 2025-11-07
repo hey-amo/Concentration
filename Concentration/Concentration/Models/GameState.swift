@@ -153,6 +153,7 @@ class GameState {
             case .matched(let baseScore):
                 // Check if cards match
                 let selectedIds = await coordinator.getSelectedCardIds()
+                print ("SelectedIDs = \(selectedIds.count)")
                 if selectedIds.count == 2,
                    let card1 = cards.first(where: { $0.id == selectedIds[0] }),
                    let card2 = cards.first(where: { $0.id == selectedIds[1] }) {
@@ -171,6 +172,7 @@ class GameState {
                 }
                 
             case .noMatch:
+                print ("No match")
                 break
                 
             case .busy, .alreadySelected:
