@@ -8,7 +8,7 @@
 import Foundation
 
 // Emojis
-enum Character: String, CaseIterable, Codable {
+enum Character: String, CaseIterable, Codable, Sendable {
     case dog = "🐶"
     case cat = "🐱"
     case mouse = "🐭"
@@ -25,7 +25,7 @@ enum Character: String, CaseIterable, Codable {
     }
 }
 
-struct Card: Identifiable, Codable, Equatable {
+struct Card: Identifiable, Codable, Equatable, Sendable {
     let id: UUID
     let character: Character
     let pairId: UUID
