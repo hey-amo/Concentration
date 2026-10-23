@@ -65,7 +65,9 @@ struct GameView: View {
                 LazyVGrid(columns: columns, spacing: 12) {
                     ForEach(gameState.cards) { card in
                         CardView(card: card) {
-                            gameState.selectCard(card)
+                            Task {
+                                await gameState.selectCard(card.id)
+                            }
                         }
                         .aspectRatio(0.7, contentMode: .fit)
                     }

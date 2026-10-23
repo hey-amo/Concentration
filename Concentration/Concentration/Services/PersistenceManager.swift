@@ -18,15 +18,8 @@ actor PersistenceManager {
             .appendingPathComponent("concentration_game.dat")
     }()
     
-    func saveGame(_ gameState: GameState) async {
+    func saveGame(_ stats: GameStats) async {
         do {
-            let stats = GameStats(
-                score: gameState.score,
-                flips: gameState.flips,
-                timeElapsed: 90 - gameState.timeRemaining,
-                isComplete: gameState.isGameOver
-            )
-            
             let data = try JSONEncoder().encode(stats)
             let compressed = try (data as NSData).compressed(using: .lzfse)
             try compressed.write(to: fileURL)
