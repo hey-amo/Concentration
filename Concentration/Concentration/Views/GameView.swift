@@ -16,6 +16,7 @@ struct GameView: View {
     
     init() {
         // Initialize GameState once
+        print ("Game initialised")
         _gameState = State(initialValue: GameState())
     }
     
