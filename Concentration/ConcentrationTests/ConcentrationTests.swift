@@ -119,6 +119,38 @@ final class ConcentrationTests: XCTestCase {
         XCTAssertFalse(game.isResolvingTurn)
     }
 
+    func testTimerExpiryDuringTurnResolutionRemainsALoss() async throws {
+        let (_, firstPair, _) = makeGame()
+        let game = GameState(
+            cards: firstPair,
+            turnResolutionDelay: .seconds(2),
+            timeLimit: 1
+        )
+        let pair = game.cards
+
+        await game.selectCard(pair[0].id)
+        let secondSelection = Task { @MainActor in
+            await game.selectCard(pair[1].id)
+        }
+
+        let deadline = ContinuousClock.now + .milliseconds(1_800)
+        while !game.isGameOver && ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        XCTAssertTrue(game.isGameOver, "The one-second timer should expire before turn resolution.")
+        XCTAssertEqual(game.timeRemaining, 0)
+        XCTAssertFalse(game.gameWon)
+
+        await secondSelection.value
+
+        XCTAssertTrue(game.isGameOver)
+        XCTAssertFalse(game.gameWon)
+        XCTAssertEqual(game.score, 0)
+        XCTAssertTrue(game.cards.allSatisfy { !$0.isMatched })
+        XCTAssertFalse(game.isResolvingTurn)
+    }
+
     func testSelectingAlreadyFaceUpCardDoesNotCountAnotherFlip() async throws {
         let (game, firstPair, _) = makeGame()
 

@@ -29,11 +29,13 @@ final class GameState {
     private(set) var cards: [Card]
     private(set) var flips = 0
     private(set) var score = 0
-    private(set) var timeRemaining = 90
+    private(set) var timeRemaining: Int
     private(set) var isGameOver = false
     private(set) var gameWon = false
     private(set) var timerStarted = false
     private(set) var isResolvingTurn = false
+
+    let timeLimit: Int
 
     @ObservationIgnored private var selectedCardIDs: [UUID] = []
     @ObservationIgnored private var gameID = UUID()
@@ -42,8 +44,11 @@ final class GameState {
 
     init(
         cards: [Card]? = nil,
-        turnResolutionDelay: Duration = .milliseconds(800)
+        turnResolutionDelay: Duration = .milliseconds(800),
+        timeLimit: Int = 90
     ) {
+        self.timeLimit = timeLimit
+        self.timeRemaining = timeLimit
         self.cards = Self.faceDown(cards ?? Self.makeDeck())
         self.turnResolutionDelay = turnResolutionDelay
     }
@@ -56,7 +61,7 @@ final class GameState {
         isResolvingTurn = false
         score = 0
         flips = 0
-        timeRemaining = 90
+        timeRemaining = timeLimit
         isGameOver = false
         gameWon = false
         timerStarted = false
@@ -107,8 +112,13 @@ final class GameState {
             return
         }
 
-        guard gameID == resolvingGameID,
-              let firstIndex = cards.firstIndex(where: { $0.id == firstCardID }),
+        guard gameID == resolvingGameID else { return }
+        guard !isGameOver else {
+            selectedCardIDs.removeAll()
+            isResolvingTurn = false
+            return
+        }
+        guard let firstIndex = cards.firstIndex(where: { $0.id == firstCardID }),
               let secondIndex = cards.firstIndex(where: { $0.id == secondCardID }) else {
             return
         }
@@ -212,7 +222,7 @@ final class GameState {
         timerTask?.cancel()
 
         if won {
-            let timeElapsed = 90 - timeRemaining
+            let timeElapsed = timeLimit - timeRemaining
             let multiplier = calculateTimeBonus(timeElapsed: timeElapsed)
             score = Int(Double(score) * multiplier)
             playSound(.win)
@@ -225,7 +235,7 @@ final class GameState {
         let stats = GameStats(
             score: score,
             flips: flips,
-            timeElapsed: 90 - timeRemaining,
+            timeElapsed: timeLimit - timeRemaining,
             isComplete: isGameOver
         )
         Task {

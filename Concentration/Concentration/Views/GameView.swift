@@ -109,7 +109,7 @@ struct GameView: View {
                     won: gameState.gameWon,
                     score: gameState.score,
                     flips: gameState.flips,
-                    timeElapsed: 90 - gameState.timeRemaining,
+                    timeElapsed: gameState.timeLimit - gameState.timeRemaining,
                     onPlayAgain: {
                         gameState.setupNewGame()
                     }
