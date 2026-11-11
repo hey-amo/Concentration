@@ -16,6 +16,11 @@ enum OnboardingJourney: String, CaseIterable, Identifiable {
         case .firstPlay:
             [
                 OBFeature(
+                    title: "Hello! Welcome!",
+                    description: "Welcome to the game. Find pairs.",
+                    icon: "square.on.square"
+                ),
+                OBFeature(
                     title: "Find a Pair",
                     description: "Tap two cards to reveal them.",
                     icon: "square.on.square"
@@ -60,8 +65,8 @@ enum OnboardingJourney: String, CaseIterable, Identifiable {
         case .firstMatch:
             [
                 OBFeature(
-                    title: "Find More Pairs",
-                    description: "Matched cards stay face up. Find the remaining pairs.",
+                    title: "You got a match!",
+                    description: "Matched cards stay face up. Now, find the remaining pairs.",
                     icon: "checkmark"
                 )
             ]
