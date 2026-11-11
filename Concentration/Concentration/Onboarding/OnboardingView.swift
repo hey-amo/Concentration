@@ -79,16 +79,26 @@ struct OnboardingView: View {
     }
 }
 
-// needs a well done tip
-#Preview("Game tips") {
+#Preview("First play") {
     OnboardingView(
         appName: "Concentration",
-        features: [
-            OBFeature(title: "Find a Pair", description: "Tap two cards to reveal them. Match their pictures to score points.", icon: "square.on.square"),
-            OBFeature(title: "Watch the Clock", description: "The timer starts when you flip your first card.", icon: "timer"),
-            OBFeature(title: "Keep Going", description: "Match every pair before time runs out.", icon: "star")
-        ],
-        color: .blue
+        features: OnboardingJourney.firstPlay.features
+    )
+    .padding()
+}
+
+#Preview("Puzzle complete") {
+    OnboardingView(
+        appName: "Concentration",
+        features: OnboardingJourney.puzzleComplete.features
+    )
+    .padding()
+}
+
+#Preview("Time out") {
+    OnboardingView(
+        appName: "Concentration",
+        features: OnboardingJourney.timeOut.features
     )
     .padding()
 }
