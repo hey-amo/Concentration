@@ -79,6 +79,7 @@ struct OnboardingView: View {
     }
 }
 
+// needs a well done tip
 #Preview("Game tips") {
     OnboardingView(
         appName: "Concentration",

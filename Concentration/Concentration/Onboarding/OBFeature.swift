@@ -15,3 +15,8 @@ struct OBFeature: Identifiable {
         self.icon = icon
     }
 }
+
+// Extension specific onboarding journeys
+// :first-play-journey
+// :well-done-journey
+// what else?

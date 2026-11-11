@@ -10,7 +10,6 @@ struct GameView: View {
     @State private var hasCompletedInitialDeal = false
 
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
@@ -24,7 +23,7 @@ struct GameView: View {
             VStack(spacing: 20) {
                 HStack {
                     GameScoreView(gameState: gameState)
-                    Spacer()
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     GameTimerView(gameState: gameState)
                 }
                 .padding(.horizontal)
@@ -43,37 +42,17 @@ struct GameView: View {
                 )
                 .id(dealID)
 
-                HStack(spacing: 20) {
-                    Button {
+                // Footer bar
+                GameFooterView(
+                    isDealComplete: isDealComplete,
+                    hasCompletedInitialDeal: hasCompletedInitialDeal,
+                    onNewGame: {
                         confirmNewGame = true
-                    } label: {
-                        Label("New Game", systemImage: "arrow.clockwise")
-                            .font(.headline)
-                            .padding()
-                            .frame(maxWidth: .infinity)
-                            .background(.blue)
-                            .foregroundStyle(.white)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
-                    }
-                    .accessibilityHidden(!isDealComplete)
-
-                    Button {
+                    },
+                    onSettings: {
                         showSettings = true
-                    } label: {
-                        Label("Settings", systemImage: "gear")
-                            .font(.headline)
-                            .padding()
-                            .frame(maxWidth: .infinity)
-                            .background(.gray.opacity(0.2))
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
                     }
-                    .accessibilityHidden(!isDealComplete)
-                }
-                .padding(.horizontal)
-                .disabled(!isDealComplete)
-                .opacity(isDealComplete ? 1 : (hasCompletedInitialDeal ? 0.2 : 0))
-                .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: isDealComplete)
-                .accessibilityHidden(!isDealComplete)
+                )
             }
             .padding(.vertical)
 
@@ -109,6 +88,47 @@ struct GameView: View {
     }
 }
 
+// Partial: Game footer view
+private struct GameFooterView: View {
+    let isDealComplete: Bool
+    let hasCompletedInitialDeal: Bool
+    let onNewGame: () -> Void
+    let onSettings: () -> Void
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        HStack(spacing: 20) {
+            Button(action: onNewGame) {
+                Label("New Game", systemImage: "arrow.clockwise")
+                    .font(.headline)
+                    .padding()
+                    .frame(maxWidth: .infinity)
+                    .background(.blue)
+                    .foregroundStyle(.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+            .accessibilityHidden(!isDealComplete)
+
+            Button(action: onSettings) {
+                Label("Settings", systemImage: "gear")
+                    .font(.headline)
+                    .padding()
+                    .frame(maxWidth: .infinity)
+                    .background(.gray.opacity(0.2))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+            .accessibilityHidden(!isDealComplete)
+        }
+        .padding(.horizontal)
+        .disabled(!isDealComplete)
+        .opacity(isDealComplete ? 1 : (hasCompletedInitialDeal ? 0.2 : 0))
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: isDealComplete)
+        .accessibilityHidden(!isDealComplete)
+    }
+}
+
+// Partial: Game score view
 private struct GameScoreView: View {
     let gameState: GameState
 
@@ -124,6 +144,7 @@ private struct GameScoreView: View {
     }
 }
 
+// Partial: Game timer view
 private struct GameTimerView: View {
     let gameState: GameState
 
@@ -142,6 +163,7 @@ private struct GameTimerView: View {
     }
 }
 
+// Partial: Game result overlay view
 private struct GameResultOverlay: View {
     let gameState: GameState
     let onPlayAgain: () -> Void
