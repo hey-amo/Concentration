@@ -81,6 +81,9 @@ final class GameState {
     @ObservationIgnored private var selectedCardIDs: [UUID] = []
     @ObservationIgnored private var gameID = UUID()
     @ObservationIgnored private var timerTask: Task<Void, Never>?
+    @ObservationIgnored private let clock = ContinuousClock()
+    @ObservationIgnored private var timerDeadline: ContinuousClock.Instant?
+    @ObservationIgnored private var remainingDuration: Duration
     @ObservationIgnored private let turnResolutionDelay: Duration
     @ObservationIgnored private let eventObserver: (any GameEventObserving)?
 
@@ -92,6 +95,7 @@ final class GameState {
     ) {
         self.timeLimit = timeLimit
         self.timeRemaining = timeLimit
+        self.remainingDuration = .seconds(timeLimit)
         self.cards = Self.faceDown(cards ?? Self.makeDeck())
         self.turnResolutionDelay = turnResolutionDelay
         self.eventObserver = eventObserver
@@ -100,6 +104,8 @@ final class GameState {
     func setupNewGame() {
         timerTask?.cancel()
         timerTask = nil
+        timerDeadline = nil
+        remainingDuration = .seconds(timeLimit)
         gameID = UUID()
         selectedCardIDs.removeAll()
         isResolvingTurn = false
@@ -113,6 +119,7 @@ final class GameState {
     }
 
     func selectCard(_ cardID: UUID) async {
+        synchronizeTimer()
         guard !isGameOver,
               !isResolvingTurn,
               let index = cards.firstIndex(where: { $0.id == cardID }),
@@ -157,6 +164,7 @@ final class GameState {
         }
 
         guard gameID == resolvingGameID else { return }
+        synchronizeTimer()
         guard !isGameOver else {
             selectedCardIDs.removeAll()
             isResolvingTurn = false
@@ -225,11 +233,17 @@ final class GameState {
     }
 
     private func startTimer() {
-        timerTask?.cancel()
+        guard timerTask == nil else { return }
+        timerDeadline = clock.now + remainingDuration
         timerTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
+                guard let delay = self.map({
+                    $0.remainingDuration - .seconds(max($0.timeRemaining - 1, 0))
+                }) else {
+                    return
+                }
                 do {
-                    try await Task.sleep(for: .seconds(1))
+                    try await Task.sleep(for: delay)
                 } catch is CancellationError {
                     return
                 } catch {
@@ -237,21 +251,20 @@ final class GameState {
                     return
                 }
 
-                guard !Task.isCancelled,
-                      let self,
-                      self.timeRemaining > 0,
-                      !self.isGameOver else {
+                guard !Task.isCancelled, let self else {
                     return
                 }
-                self.timeRemaining -= 1
-                if self.timeRemaining <= 0 { self.endGame(won: false) }
+                self.synchronizeTimer()
+                if self.isGameOver { return }
             }
         }
     }
 
     func pauseTimer() {
+        synchronizeTimer()
         timerTask?.cancel()
         timerTask = nil
+        timerDeadline = nil
     }
 
     func resumeTimer() {
@@ -260,10 +273,25 @@ final class GameState {
         }
     }
 
+    private func synchronizeTimer() {
+        guard let timerDeadline, !isGameOver else { return }
+        remainingDuration = max(.zero, clock.now.duration(to: timerDeadline))
+        let components = remainingDuration.components
+        let seconds = Int(components.seconds) + (components.attoseconds > 0 ? 1 : 0)
+        if timeRemaining != seconds {
+            timeRemaining = seconds
+        }
+        if remainingDuration == .zero {
+            endGame(won: false)
+        }
+    }
+
     private func endGame(won: Bool) {
         isGameOver = true
         gameWon = won
         timerTask?.cancel()
+        timerTask = nil
+        timerDeadline = nil
 
         if won {
             let timeElapsed = timeLimit - timeRemaining
