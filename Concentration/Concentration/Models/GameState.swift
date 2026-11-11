@@ -12,15 +12,56 @@ enum SoundEffect {
     case cardFlip, match, noMatch, win, lose
 }
 
-enum HapticType {
-    case success, error, light
+enum GameEvent: Equatable {
+    case match, mismatch, win, loss
 }
 
-struct GameStats: Codable, Sendable {
+@MainActor
+protocol GameEventObserving: AnyObject {
+    func gameEventOccurred(_ event: GameEvent)
+}
+
+struct GameStats: Codable, Equatable, Sendable {
+    var id: UUID
     var score: Int
     var flips: Int
     var timeElapsed: Int
     var isComplete: Bool
+    var isWin: Bool
+    var completedAt: Date
+
+    private enum CodingKeys: String, CodingKey {
+        case id, score, flips, timeElapsed, isComplete, isWin, completedAt
+    }
+
+    init(
+        id: UUID = UUID(),
+        score: Int,
+        flips: Int,
+        timeElapsed: Int,
+        isComplete: Bool,
+        isWin: Bool,
+        completedAt: Date = .now
+    ) {
+        self.id = id
+        self.score = score
+        self.flips = flips
+        self.timeElapsed = timeElapsed
+        self.isComplete = isComplete
+        self.isWin = isWin
+        self.completedAt = completedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        score = try container.decode(Int.self, forKey: .score)
+        flips = try container.decode(Int.self, forKey: .flips)
+        timeElapsed = try container.decode(Int.self, forKey: .timeElapsed)
+        isComplete = try container.decode(Bool.self, forKey: .isComplete)
+        isWin = try container.decodeIfPresent(Bool.self, forKey: .isWin) ?? false
+        completedAt = try container.decodeIfPresent(Date.self, forKey: .completedAt) ?? .distantPast
+    }
 }
 
 @MainActor
@@ -41,16 +82,19 @@ final class GameState {
     @ObservationIgnored private var gameID = UUID()
     @ObservationIgnored private var timerTask: Task<Void, Never>?
     @ObservationIgnored private let turnResolutionDelay: Duration
+    @ObservationIgnored private let eventObserver: (any GameEventObserving)?
 
     init(
         cards: [Card]? = nil,
         turnResolutionDelay: Duration = .milliseconds(800),
-        timeLimit: Int = 90
+        timeLimit: Int = 90,
+        eventObserver: (any GameEventObserving)? = nil
     ) {
         self.timeLimit = timeLimit
         self.timeRemaining = timeLimit
         self.cards = Self.faceDown(cards ?? Self.makeDeck())
         self.turnResolutionDelay = turnResolutionDelay
+        self.eventObserver = eventObserver
     }
 
     func setupNewGame() {
@@ -86,7 +130,7 @@ final class GameState {
             startTimer()
         }
 
-        playSound(.cardFlip)
+        AudioManager.shared.play(.cardFlip)
 
         guard selectedCardIDs.count == 2 else { return }
 
@@ -127,16 +171,16 @@ final class GameState {
             cards[firstIndex].isMatched = true
             cards[secondIndex].isMatched = true
             score += 10
-            playSound(.match)
-            triggerHaptic(.success)
+            AudioManager.shared.play(.match)
+            eventObserver?.gameEventOccurred(.match)
 
             if cards.allSatisfy(\.isMatched) {
                 endGame(won: true)
             }
         } else {
             turnCardsDown([firstCardID, secondCardID])
-            playSound(.noMatch)
-            triggerHaptic(.error)
+            AudioManager.shared.play(.noMatch)
+            eventObserver?.gameEventOccurred(.mismatch)
         }
 
         selectedCardIDs.removeAll()
@@ -225,21 +269,26 @@ final class GameState {
             let timeElapsed = timeLimit - timeRemaining
             let multiplier = calculateTimeBonus(timeElapsed: timeElapsed)
             score = Int(Double(score) * multiplier)
-            playSound(.win)
-            triggerHaptic(.success)
+            AudioManager.shared.play(.win)
+            eventObserver?.gameEventOccurred(.win)
         } else {
-            playSound(.lose)
-            triggerHaptic(.error)
+            AudioManager.shared.play(.lose)
+            eventObserver?.gameEventOccurred(.loss)
         }
 
         let stats = GameStats(
             score: score,
             flips: flips,
             timeElapsed: timeLimit - timeRemaining,
-            isComplete: isGameOver
+            isComplete: true,
+            isWin: won
         )
         Task {
-            await PersistenceManager.shared.saveGame(stats)
+            do {
+                try await PersistenceManager.shared.saveGame(stats)
+            } catch {
+                print("Failed to save game history: \(error)")
+            }
         }
     }
 
@@ -251,11 +300,5 @@ final class GameState {
         case 46...60: return 1.5
         default: return 1.0
         }
-    }
-
-    private func playSound(_ sound: SoundEffect) {
-    }
-
-    private func triggerHaptic(_ type: HapticType) {
     }
 }

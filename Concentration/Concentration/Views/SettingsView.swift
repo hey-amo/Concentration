@@ -1,53 +1,69 @@
-//
-//  SettingsView.swift
-//  Concentration
-//
-//  Created by Amarjit on 01/11/2025.
-//
-
-import Foundation
 import SwiftUI
+
+enum AppAppearance: String, CaseIterable, Identifiable {
+    case system
+    case light
+    case dark
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .system: "System"
+        case .light: "Light"
+        case .dark: "Dark"
+        }
+    }
+
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system: nil
+        case .light: .light
+        case .dark: .dark
+        }
+    }
+}
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
-    
+    @AppStorage("appearanceMode") private var appearanceMode = AppAppearance.system.rawValue
+    @Bindable private var audioManager = AudioManager.shared
+    @State private var gameHistory: [GameStats] = []
+    @State private var showingResetConfirmation = false
+    @State private var showingError = false
+    @State private var errorMessage = ""
+
     var body: some View {
         NavigationStack {
             Form {
                 Section("Sound") {
-                    Toggle("Sound effects", isOn: .constant(true))
-                    Toggle("Background music", isOn: .constant(true))
+                    Toggle("Sound effects", isOn: $audioManager.isSoundEffectsEnabled)
+                    Toggle("Background music", isOn: $audioManager.isBackgroundMusicEnabled)
                 }
+
                 Section("Display") {
-                    Toggle("Dark mode", isOn: .constant(true))
-                }
-                Section("Game") {
-                    Button("Reset game data") {
-                        // Do something
+                    Picker("Appearance", selection: $appearanceMode) {
+                        ForEach(AppAppearance.allCases) { appearance in
+                            Text(appearance.title).tag(appearance.rawValue)
+                        }
                     }
                 }
-                
-                /*
-                Section("Game Info") {
-                    LabeledContent("Grid Size", value: "5×4 (20 cards)")
-                    LabeledContent("Time Limit", value: "90 seconds")
+
+                Section("Game data") {
+                    LabeledContent("Games played", value: "\(gameHistory.count)")
+                    LabeledContent("Wins", value: "\(gameHistory.filter(\.isWin).count)")
+                    LabeledContent("Best score", value: "\(gameHistory.map(\.score).max() ?? 0)")
+                    Button("Reset game data", role: .destructive) {
+                        showingResetConfirmation = true
+                    }
+                    .disabled(gameHistory.isEmpty)
                 }
-                
-                Section("Time Bonuses") {
-                    LabeledContent("0-20s", value: "3× multiplier")
-                    LabeledContent("21-30s", value: "2.5× multiplier")
-                    LabeledContent("31-45s", value: "2× multiplier")
-                    LabeledContent("46-60s", value: "1.5× multiplier")
-                    LabeledContent("60s+", value: "No bonus")
-                }
-                */
-                
+
                 Section("About") {
                     LabeledContent("Version", value: "1.0")
                 }
             }
             .navigationTitle("Settings")
-            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {
@@ -55,6 +71,48 @@ struct SettingsView: View {
                     }
                 }
             }
+            .confirmationDialog(
+                "Delete all saved game results?",
+                isPresented: $showingResetConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Reset game data", role: .destructive) {
+                    Task { await resetGameData() }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Your sound and appearance preferences will be kept.")
+            }
+            .alert("Unable to update game data", isPresented: $showingError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(errorMessage)
+            }
+            .task {
+                await loadGameHistory()
+            }
         }
+    }
+
+    private func loadGameHistory() async {
+        do {
+            gameHistory = try await PersistenceManager.shared.loadGames()
+        } catch {
+            present(error)
+        }
+    }
+
+    private func resetGameData() async {
+        do {
+            try await PersistenceManager.shared.resetGameData()
+            gameHistory = []
+        } catch {
+            present(error)
+        }
+    }
+
+    private func present(_ error: Error) {
+        errorMessage = error.localizedDescription
+        showingError = true
     }
 }

@@ -161,7 +161,52 @@ final class ConcentrationTests: XCTestCase {
         XCTAssertEqual(game.flips, 1)
     }
 
+    func testMismatchIsPublishedToGameEventObserver() async {
+        let observer = GameEventRecorder()
+        let (game, firstPair, secondPair) = makeGame()
+        let observedGame = GameState(
+            cards: game.cards,
+            turnResolutionDelay: .zero,
+            eventObserver: observer
+        )
+
+        await observedGame.selectCard(firstPair[0].id)
+        await observedGame.selectCard(secondPair[0].id)
+
+        XCTAssertEqual(observer.events, [.mismatch])
+    }
+
+    func testGameHistoryCanBeLoadedAndReset() async throws {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(UUID().uuidString).dat")
+        let persistence = PersistenceManager(fileURL: fileURL)
+        let result = GameStats(
+            score: 100,
+            flips: 12,
+            timeElapsed: 30,
+            isComplete: true,
+            isWin: true
+        )
+
+        try await persistence.saveGame(result)
+        let savedHistory = try await persistence.loadGames()
+        XCTAssertEqual(savedHistory, [result])
+
+        try await persistence.resetGameData()
+        let resetHistory = try await persistence.loadGames()
+        XCTAssertTrue(resetHistory.isEmpty)
+    }
+
     private func card(_ id: UUID, in game: GameState) throws -> Card {
         try XCTUnwrap(game.cards.first { $0.id == id })
+    }
+
+    @MainActor
+    private final class GameEventRecorder: GameEventObserving {
+        private(set) var events: [GameEvent] = []
+
+        func gameEventOccurred(_ event: GameEvent) {
+            events.append(event)
+        }
     }
 }

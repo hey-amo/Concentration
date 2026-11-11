@@ -7,6 +7,7 @@ import Observation
 // MARK: GameView
 
 struct GameView: View {
+    @AppStorage("appearanceMode") private var appearanceMode = AppAppearance.system.rawValue
     @State private var gameState: GameState
     @State private var showSettings = false
     @State private var showGameOver = false
@@ -17,7 +18,7 @@ struct GameView: View {
     init() {
         // Initialize GameState once
         print ("Game initialised")
-        _gameState = State(initialValue: GameState())
+        _gameState = State(initialValue: GameState(eventObserver: HapticsController()))
     }
     
     let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 5)
@@ -116,6 +117,7 @@ struct GameView: View {
                 )
             }
         }
+        .preferredColorScheme(AppAppearance(rawValue: appearanceMode)?.colorScheme)
         .id(viewID)  // Stable identity for the view
         .sheet(isPresented: $showSettings) {
             SettingsView()
