@@ -64,6 +64,8 @@ struct CardView: View {
             .animation(.easeInOut(duration: 0.1), value: isPressed)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(card.isFaceUp ? "Card: \(card.emoji)" : "Face-down card")
+        .accessibilityValue(card.isMatched ? "Matched" : "")
         .simultaneousGesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { _ in isPressed = true }

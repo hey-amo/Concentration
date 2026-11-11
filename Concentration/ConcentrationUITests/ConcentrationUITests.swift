@@ -32,6 +32,50 @@ final class ConcentrationUITests: XCTestCase {
     }
 
     @MainActor
+    func testNewGameConfirmationCancelsOrResetsProgress() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        let firstCard = app.buttons["card-0"]
+        XCTAssertTrue(firstCard.waitForExistence(timeout: 10))
+        let ready = expectation(for: NSPredicate(format: "isHittable == true"), evaluatedWith: firstCard)
+        wait(for: [ready], timeout: 10)
+        firstCard.tap()
+        XCTAssertTrue(app.staticTexts["Flips: 1"].waitForExistence(timeout: 2))
+        let footerFrame = app.buttons["New Game"].frame
+        app.buttons["Settings"].tap()
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.staticTexts["Flips: 1"].exists)
+        XCTAssertTrue(app.buttons["card-1"].isHittable)
+
+        app.buttons["New Game"].tap()
+        let alert = app.alerts["Start a New Game?"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 2))
+        XCTAssertTrue(alert.staticTexts["Your current game progress will be lost."].exists)
+        alert.buttons["Cancel"].tap()
+        XCTAssertTrue(app.staticTexts["Flips: 1"].exists)
+
+        app.buttons["New Game"].tap()
+        alert.buttons["Start New Game"].tap()
+        XCTAssertFalse(app.buttons["New Game"].isHittable)
+        XCTAssertFalse(app.buttons["Settings"].isHittable)
+        XCTAssertFalse(app.buttons["card-0"].isHittable)
+        XCTAssertTrue(app.staticTexts["Flips: 0"].waitForExistence(timeout: 2))
+        XCTAssertTrue(app.staticTexts["Score: 0"].exists)
+        let newGameButton = app.buttons["New Game"]
+        let newGameReady = expectation(
+            for: NSPredicate(format: "isHittable == true"),
+            evaluatedWith: newGameButton
+        )
+        wait(for: [newGameReady], timeout: 10)
+        XCTAssertEqual(newGameButton.frame.minY, footerFrame.minY, accuracy: 1)
+        XCTAssertTrue(app.buttons["Settings"].isHittable)
+        XCTAssertTrue(app.buttons["card-0"].isHittable)
+        app.buttons["card-0"].tap()
+        XCTAssertTrue(app.staticTexts["Flips: 1"].waitForExistence(timeout: 2))
+    }
+
+    @MainActor
     func testLaunchPerformance() throws {
         if #available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 7.0, *) {
             // This measures how long it takes to launch your application.

@@ -151,6 +151,40 @@ final class ConcentrationTests: XCTestCase {
         XCTAssertFalse(game.isResolvingTurn)
     }
 
+    func testTimerPreservesPartialSecondsWhenPaused() async throws {
+        let (_, firstPair, _) = makeGame()
+        let game = GameState(cards: firstPair, timeLimit: 2)
+
+        await game.selectCard(firstPair[0].id)
+        try await Task.sleep(for: .milliseconds(700))
+        game.pauseTimer()
+        let pausedTime = game.timeRemaining
+        try await Task.sleep(for: .milliseconds(500))
+        XCTAssertEqual(game.timeRemaining, pausedTime)
+
+        game.resumeTimer()
+        let deadline = ContinuousClock.now + .milliseconds(1_750)
+        while !game.isGameOver && ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertTrue(game.isGameOver, "The timer should resume with its fractional time remaining.")
+        XCTAssertEqual(game.timeRemaining, 0)
+    }
+
+    func testExpiredTimerIsCheckedBeforeAnotherSelection() async {
+        let (_, firstPair, _) = makeGame()
+        let game = GameState(cards: firstPair, timeLimit: 1)
+
+        await game.selectCard(firstPair[0].id)
+        blockMainThread(for: 1.1)
+        await game.selectCard(firstPair[1].id)
+
+        XCTAssertTrue(game.isGameOver)
+        XCTAssertFalse(game.gameWon)
+        XCTAssertEqual(game.timeRemaining, 0)
+        XCTAssertEqual(game.flips, 1)
+    }
+
     func testSelectingAlreadyFaceUpCardDoesNotCountAnotherFlip() async throws {
         let (game, firstPair, _) = makeGame()
 
@@ -199,6 +233,10 @@ final class ConcentrationTests: XCTestCase {
 
     private func card(_ id: UUID, in game: GameState) throws -> Card {
         try XCTUnwrap(game.cards.first { $0.id == id })
+    }
+
+    private func blockMainThread(for interval: TimeInterval) {
+        Thread.sleep(forTimeInterval: interval)
     }
 
     @MainActor
