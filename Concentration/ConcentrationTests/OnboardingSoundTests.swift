@@ -1,55 +1,46 @@
-import SwiftUI
-import UIKit
+import Foundation
 import XCTest
 @testable import Concentration
 
 @MainActor
 final class OnboardingSoundTests: XCTestCase {
-    func testShowingFirstTipNotifiesOnce() async throws {
-        let scene = try XCTUnwrap(
-            UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
-        )
-        let previousWindow = scene.windows.first(where: \.isKeyWindow)
-        let window = UIWindow(windowScene: scene)
+    func testMultiStepJourneyNotifiesOncePerPresentation() throws {
+        let suite = "OnboardingSoundTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
         var notifications = 0
-        window.rootViewController = UIHostingController(
-            rootView: OnboardingView(
-                appName: "Concentration",
-                features: [OBFeature(title: "Tip", description: "Test tip")],
-                onShowTip: { notifications += 1 }
-            )
-        )
-        window.makeKeyAndVisible()
-        defer {
-            window.isHidden = true
-            previousWindow?.makeKeyAndVisible()
-        }
+        let coordinator = OnboardingCoordinator(defaults: defaults) { notifications += 1 }
 
-        try await Task.sleep(for: .milliseconds(200))
+        coordinator.dealCompleted()
+        coordinator.presentIfPossible(false)
+        XCTAssertEqual(notifications, 0)
+        coordinator.presentIfPossible(true)
+        XCTAssertEqual(coordinator.activeJourney, .firstPlay)
+        XCTAssertGreaterThan(OnboardingJourney.firstPlay.features.count, 1)
+        coordinator.presentIfPossible(true)
         XCTAssertEqual(notifications, 1)
+
+        coordinator.suspendForAnimation()
+        coordinator.presentIfPossible(true)
+        XCTAssertEqual(notifications, 1)
+        coordinator.finishJourney()
+        coordinator.replayIntroduction()
+        coordinator.presentIfPossible(true)
+        XCTAssertEqual(notifications, 2)
     }
 
-    func testEmptyJourneyDoesNotNotify() async throws {
-        let scene = try XCTUnwrap(
-            UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
-        )
-        let previousWindow = scene.windows.first(where: \.isKeyWindow)
-        let window = UIWindow(windowScene: scene)
+    func testDisabledTipsNeverNotify() throws {
+        let suite = "OnboardingSoundTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
         var notifications = 0
-        window.rootViewController = UIHostingController(
-            rootView: OnboardingView(
-                appName: "Concentration",
-                features: [],
-                onShowTip: { notifications += 1 }
-            )
-        )
-        window.makeKeyAndVisible()
-        defer {
-            window.isHidden = true
-            previousWindow?.makeKeyAndVisible()
-        }
-
-        try await Task.sleep(for: .milliseconds(200))
+        let coordinator = OnboardingCoordinator(defaults: defaults) { notifications += 1 }
+        coordinator.setTipsEnabled(false)
+        coordinator.dealCompleted()
+        coordinator.replayIntroduction()
+        coordinator.gameEventOccurred(.match)
+        coordinator.presentIfPossible(true)
+        XCTAssertNil(coordinator.activeJourney)
         XCTAssertEqual(notifications, 0)
     }
 }

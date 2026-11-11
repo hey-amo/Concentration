@@ -7,6 +7,7 @@
 
 import Foundation
 import Observation
+import SwiftUI
 
 enum SoundEffect {
     case cardFlip, match, noMatch, win, lose, tipNotification
@@ -75,6 +76,7 @@ final class GameState {
     private(set) var gameWon = false
     private(set) var timerStarted = false
     private(set) var isResolvingTurn = false
+    private(set) var activeCardAnimations = 0
 
     let timeLimit: Int
 
@@ -109,6 +111,7 @@ final class GameState {
         gameID = UUID()
         selectedCardIDs.removeAll()
         isResolvingTurn = false
+        activeCardAnimations = 0
         score = 0
         flips = 0
         timeRemaining = timeLimit
@@ -118,7 +121,7 @@ final class GameState {
         cards = Self.makeDeck()
     }
 
-    func selectCard(_ cardID: UUID) async {
+    func selectCard(_ cardID: UUID, animated: Bool = true) async {
         synchronizeTimer()
         guard !isGameOver,
               !isResolvingTurn,
@@ -128,7 +131,9 @@ final class GameState {
             return
         }
 
-        cards[index].isFaceUp = true
+        animateCardChanges(animated: animated) {
+            cards[index].isFaceUp = true
+        }
         flips += 1
         selectedCardIDs.append(cardID)
 
@@ -150,14 +155,14 @@ final class GameState {
             try await Task.sleep(for: turnResolutionDelay)
         } catch is CancellationError {
             guard gameID == resolvingGameID else { return }
-            turnCardsDown([firstCardID, secondCardID])
+            turnCardsDown([firstCardID, secondCardID], animated: animated)
             selectedCardIDs.removeAll()
             isResolvingTurn = false
             return
         } catch {
             assertionFailure("Unexpected turn-resolution delay error: \(error)")
             guard gameID == resolvingGameID else { return }
-            turnCardsDown([firstCardID, secondCardID])
+            turnCardsDown([firstCardID, secondCardID], animated: animated)
             selectedCardIDs.removeAll()
             isResolvingTurn = false
             return
@@ -186,7 +191,7 @@ final class GameState {
                 endGame(won: true)
             }
         } else {
-            turnCardsDown([firstCardID, secondCardID])
+            turnCardsDown([firstCardID, secondCardID], animated: animated)
             AudioManager.shared.play(.noMatch)
             eventObserver?.gameEventOccurred(.mismatch)
         }
@@ -222,13 +227,30 @@ final class GameState {
         }
     }
 
-    private func turnCardsDown(_ cardIDs: [UUID]) {
-        for cardID in cardIDs {
-            guard let index = cards.firstIndex(where: { $0.id == cardID }),
-                  !cards[index].isMatched else {
-                continue
+    private func turnCardsDown(_ cardIDs: [UUID], animated: Bool) {
+        animateCardChanges(animated: animated) {
+            for cardID in cardIDs {
+                guard let index = cards.firstIndex(where: { $0.id == cardID }),
+                      !cards[index].isMatched else {
+                    continue
+                }
+                cards[index].isFaceUp = false
             }
-            cards[index].isFaceUp = false
+        }
+    }
+
+    private func animateCardChanges(animated: Bool, changes: () -> Void) {
+        guard animated else {
+            changes()
+            return
+        }
+        let animationGameID = gameID
+        activeCardAnimations += 1
+        withAnimation(.spring(duration: 0.6), completionCriteria: .removed) {
+            changes()
+        } completion: {
+            guard self.gameID == animationGameID else { return }
+            self.activeCardAnimations -= 1
         }
     }
 

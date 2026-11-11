@@ -28,6 +28,8 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage("appearanceMode") private var appearanceMode = AppAppearance.system.rawValue
     @Bindable private var audioManager = AudioManager.shared
+    @Bindable var onboarding: OnboardingCoordinator
+    var onReplayIntroduction: () -> Void
     @State private var gameHistory: [GameStats] = []
     @State private var showingResetConfirmation = false
     @State private var showingError = false
@@ -47,6 +49,15 @@ struct SettingsView: View {
                             Text(appearance.title).tag(appearance.rawValue)
                         }
                     }
+                }
+
+                Section("Tips") {
+                    Toggle("Show tips", isOn: Binding(
+                        get: { onboarding.tipsEnabled },
+                        set: { onboarding.setTipsEnabled($0) }
+                    ))
+                    Button("Replay introduction", action: onReplayIntroduction)
+                        .disabled(!onboarding.tipsEnabled)
                 }
 
                 Section("Game data") {
@@ -81,7 +92,7 @@ struct SettingsView: View {
                 }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("Your sound and appearance preferences will be kept.")
+                Text("Your sound, appearance, and tips preferences will be kept.")
             }
             .alert("Unable to update game data", isPresented: $showingError) {
                 Button("OK", role: .cancel) {}

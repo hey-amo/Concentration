@@ -5,22 +5,20 @@ struct OnboardingView: View {
     let features: [OBFeature]
     let color: Color
     var onFinish: () -> Void
-    var onShowTip: () -> Void
-
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var currentStep = 0
+    @AccessibilityFocusState private var titleFocused: Bool
 
     init(
         appName: String,
         features: [OBFeature],
         color: Color = .blue,
-        onFinish: @escaping () -> Void = {},
-        onShowTip: @escaping () -> Void = { AudioManager.shared.play(.tipNotification) }
+        onFinish: @escaping () -> Void = {}
     ) {
         self.appName = appName
         self.features = features
         self.color = color
         self.onFinish = onFinish
-        self.onShowTip = onShowTip
     }
 
     var body: some View {
@@ -37,6 +35,8 @@ struct OnboardingView: View {
                     if features.indices.contains(currentStep) {
                         Text(features[currentStep].title)
                             .font(.headline)
+                            .accessibilityAddTraits(.isHeader)
+                            .accessibilityFocused($titleFocused)
                     } else {
                         Text("No tips available")
                             .font(.headline)
@@ -56,33 +56,49 @@ struct OnboardingView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            HStack {
-                if !features.isEmpty {
-                    Text("Tip \(currentStep + 1) of \(features.count)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading) {
+                    progress
+                    actions
                 }
-                Spacer()
-                if currentStep + 1 < features.count {
-                    Button("Skip", action: onFinish)
-                        .foregroundStyle(.secondary)
-                    Button("Next") { currentStep += 1 }
-                        .buttonStyle(.borderedProminent)
-                        .tint(color)
-                } else {
-                    Button("Done", action: onFinish)
-                        .buttonStyle(.borderedProminent)
-                        .tint(color)
+            } else {
+                HStack {
+                    progress
+                    Spacer()
+                    actions
                 }
             }
         }
         .padding(20)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20))
         .frame(maxWidth: 380)
-        .onChange(of: currentStep, initial: true) {
-            if features.indices.contains(currentStep) {
-                onShowTip()
-            }
+        .accessibilityIdentifier("onboarding")
+        .task {
+            titleFocused = true
+        }
+    }
+
+    @ViewBuilder
+    private var progress: some View {
+        if !features.isEmpty {
+            Text("Tip \(currentStep + 1) of \(features.count)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private var actions: some View {
+        if currentStep + 1 < features.count {
+            Button("Skip", action: onFinish)
+                .foregroundStyle(.secondary)
+            Button("Next") { currentStep += 1 }
+                .buttonStyle(.borderedProminent)
+                .tint(color)
+        } else {
+            Button("Done", action: onFinish)
+                .buttonStyle(.borderedProminent)
+                .tint(color)
         }
     }
 }
@@ -90,8 +106,7 @@ struct OnboardingView: View {
 #Preview("First play") {
     OnboardingView(
         appName: "Concentration",
-        features: OnboardingJourney.firstPlay.features,
-        onShowTip: {}
+        features: OnboardingJourney.firstPlay.features
     )
     .padding()
 }
@@ -99,8 +114,7 @@ struct OnboardingView: View {
 #Preview("Puzzle complete") {
     OnboardingView(
         appName: "Concentration",
-        features: OnboardingJourney.puzzleComplete.features,
-        onShowTip: {}
+        features: OnboardingJourney.puzzleComplete.features
     )
     .padding()
 }
@@ -108,8 +122,7 @@ struct OnboardingView: View {
 #Preview("Time out") {
     OnboardingView(
         appName: "Concentration",
-        features: OnboardingJourney.timeOut.features,
-        onShowTip: {}
+        features: OnboardingJourney.timeOut.features
     )
     .padding()
 }

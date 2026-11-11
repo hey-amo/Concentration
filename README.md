@@ -3,11 +3,11 @@ Swift memory game trying to use modern swift concurrency such as Task, Async, Aw
 
 ## Onboarding tips
 
-The standalone `OnboardingView` is not connected to the game yet. Open its
-named Xcode previews to explore the compact tutorial card. A host can
-provide an app name, an array of `OBFeature` values, a tint color, and an
-`onFinish` closure to dismiss the tips when the player skips or completes them.
-Each tip plays a notification tone when shown, respecting the sound-effects
-setting. The optional `onShowTip` closure can replace this behavior; previews
-use it to stay silent. Other callers can play the same tone with
-`AudioManager.shared.play(.tipNotification)`.
+The introduction appears after the first deal. Contextual tips appear after the
+first match, mismatch, win, and timeout, once the current animations finish.
+Each journey is shown once; skipping also marks it complete. Settings can
+disable tips or replay the introduction. Tip preferences and completed journeys
+are saved separately from game history, so resetting results keeps them.
+
+The game timer pauses while a tip is visible. A journey plays one notification
+sound regardless of its number of steps, subject to the sound-effects setting.

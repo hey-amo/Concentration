@@ -26,6 +26,7 @@ final class AudioManager {
     }
 
     @ObservationIgnored private var soundEffectPlayer: AVAudioPlayer?
+    @ObservationIgnored private var tipNotificationPlayer: AVAudioPlayer?
     @ObservationIgnored private var backgroundMusicPlayer: AVAudioPlayer?
 
     private static let soundEffectsKey = "soundEffectsEnabled"
@@ -54,9 +55,15 @@ final class AudioManager {
 
         do {
             let player = try AVAudioPlayer(data: Self.makeTone(frequencies: frequencies, duration: duration))
-            player.prepareToPlay()
-            player.play()
-            soundEffectPlayer = player
+            guard player.prepareToPlay(), player.play() else {
+                print("Failed to start sound effect: \(sound)")
+                return
+            }
+            if sound == .tipNotification {
+                tipNotificationPlayer = player
+            } else {
+                soundEffectPlayer = player
+            }
         } catch {
             print("Failed to play sound effect: \(error)")
         }
