@@ -34,11 +34,15 @@ final class ConcentrationUITests: XCTestCase {
     @MainActor
     func testNewGameConfirmationCancelsOrResetsProgress() throws {
         let app = XCUIApplication()
+        app.launchArguments += ["-showOnboardingTips", "NO"]
         app.launch()
 
         let firstCard = app.buttons["card-0"]
         XCTAssertTrue(firstCard.waitForExistence(timeout: 10))
-        let ready = expectation(for: NSPredicate(format: "isHittable == true"), evaluatedWith: firstCard)
+        let ready = expectation(
+            for: NSPredicate(format: "isEnabled == true AND isHittable == true"),
+            evaluatedWith: firstCard
+        )
         wait(for: [ready], timeout: 10)
         firstCard.tap()
         XCTAssertTrue(app.staticTexts["Flips: 1"].waitForExistence(timeout: 2))
@@ -57,14 +61,11 @@ final class ConcentrationUITests: XCTestCase {
 
         app.buttons["New Game"].tap()
         alert.buttons["Start New Game"].tap()
-        XCTAssertFalse(app.buttons["New Game"].isHittable)
-        XCTAssertFalse(app.buttons["Settings"].isHittable)
-        XCTAssertFalse(app.buttons["card-0"].isHittable)
         XCTAssertTrue(app.staticTexts["Flips: 0"].waitForExistence(timeout: 2))
         XCTAssertTrue(app.staticTexts["Score: 0"].exists)
         let newGameButton = app.buttons["New Game"]
         let newGameReady = expectation(
-            for: NSPredicate(format: "isHittable == true"),
+            for: NSPredicate(format: "isEnabled == true AND isHittable == true"),
             evaluatedWith: newGameButton
         )
         wait(for: [newGameReady], timeout: 10)
@@ -73,6 +74,111 @@ final class ConcentrationUITests: XCTestCase {
         XCTAssertTrue(app.buttons["card-0"].isHittable)
         app.buttons["card-0"].tap()
         XCTAssertTrue(app.staticTexts["Flips: 1"].waitForExistence(timeout: 2))
+    }
+
+    @MainActor
+    func testTimerPausesForSettingsConfirmationAndManualPause() throws {
+        let app = XCUIApplication()
+        app.launchArguments += ["-showOnboardingTips", "NO"]
+        app.launch()
+
+        let firstCard = app.buttons["card-0"]
+        XCTAssertTrue(firstCard.waitForExistence(timeout: 10))
+        let ready = expectation(
+            for: NSPredicate(format: "isEnabled == true AND isHittable == true"),
+            evaluatedWith: firstCard
+        )
+        wait(for: [ready], timeout: 10)
+        let pauseButton = app.buttons["Pause game"]
+        XCTAssertFalse(pauseButton.isEnabled)
+        firstCard.tap()
+        let pauseReady = expectation(
+            for: NSPredicate(format: "isEnabled == true"),
+            evaluatedWith: pauseButton
+        )
+        wait(for: [pauseReady], timeout: 10)
+
+        let beforeSettings = try remainingTime(in: app)
+        app.buttons["Settings"].tap()
+        XCTAssertTrue(app.buttons["Done"].waitForExistence(timeout: 3))
+        Thread.sleep(forTimeInterval: 3)
+        app.buttons["Done"].tap()
+        let afterSettings = try remainingTime(in: app)
+        XCTAssertLessThanOrEqual(beforeSettings - afterSettings, 1)
+        try assertTimerContinues(in: app, from: afterSettings)
+
+        let beforeConfirmation = try remainingTime(in: app)
+        app.buttons["New Game"].tap()
+        let alert = app.alerts["Start a New Game?"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 3))
+        Thread.sleep(forTimeInterval: 3)
+        alert.buttons["Cancel"].tap()
+        let afterConfirmation = try remainingTime(in: app)
+        XCTAssertLessThanOrEqual(beforeConfirmation - afterConfirmation, 1)
+        try assertTimerContinues(in: app, from: afterConfirmation)
+
+        let beforePause = try remainingTime(in: app)
+        pauseButton.tap()
+        XCTAssertTrue(app.staticTexts["Game Paused"].waitForExistence(timeout: 3))
+        XCTAssertFalse(app.buttons["card-0"].isHittable)
+        XCTAssertFalse(app.buttons["Settings"].isHittable)
+        Thread.sleep(forTimeInterval: 3)
+        app.buttons["Resume Game"].tap()
+        let afterPause = try remainingTime(in: app)
+        XCTAssertLessThanOrEqual(beforePause - afterPause, 1)
+        XCTAssertTrue(app.staticTexts["Flips: 1"].exists)
+        try assertTimerContinues(in: app, from: afterPause)
+    }
+
+    @MainActor
+    private func remainingTime(in app: XCUIApplication) throws -> Int {
+        let timer = app.staticTexts["game-timer"]
+        XCTAssertTrue(timer.waitForExistence(timeout: 3))
+        return try XCTUnwrap(Int(timer.label.replacingOccurrences(of: "s", with: "")))
+    }
+
+    @MainActor
+    private func assertTimerContinues(in app: XCUIApplication, from time: Int) throws {
+        let deadline = Date().addingTimeInterval(3)
+        while Date() < deadline {
+            if try remainingTime(in: app) < time { return }
+            Thread.sleep(forTimeInterval: 0.1)
+        }
+        XCTFail("The timer did not resume.")
+    }
+
+    @MainActor
+    func testIntroductionBlocksGameUntilFinishedAndCanBeReplayed() throws {
+        let app = XCUIApplication()
+        app.launchArguments += ["-showOnboardingTips", "YES", "-completedOnboardingJourneys", "()"]
+        app.launch()
+
+        XCTAssertTrue(app.staticTexts["Find a Pair"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["card-0"].isHittable)
+        XCTAssertFalse(app.buttons["Settings"].isHittable)
+        app.buttons["Next"].tap()
+        XCTAssertTrue(app.staticTexts["Watch the Clock"].exists)
+        app.buttons["Next"].tap()
+        XCTAssertTrue(app.staticTexts["Match Them All"].exists)
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.buttons["card-0"].waitForExistence(timeout: 3))
+        app.buttons["Settings"].tap()
+        app.buttons["Replay introduction"].tap()
+        XCTAssertTrue(app.staticTexts["Find a Pair"].waitForExistence(timeout: 5))
+        app.buttons["Skip"].tap()
+        XCTAssertTrue(app.buttons["Settings"].waitForExistence(timeout: 3))
+        app.buttons["Settings"].tap()
+        app.switches["Show tips"].coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
+        XCTAssertFalse(app.buttons["Replay introduction"].isEnabled)
+        app.buttons["Done"].tap()
+        app.buttons["New Game"].tap()
+        app.alerts["Start a New Game?"].buttons["Start New Game"].tap()
+        let ready = expectation(
+            for: NSPredicate(format: "isEnabled == true AND isHittable == true"),
+            evaluatedWith: app.buttons["New Game"]
+        )
+        wait(for: [ready], timeout: 10)
+        XCTAssertFalse(app.staticTexts["Find a Pair"].exists)
     }
 
     @MainActor

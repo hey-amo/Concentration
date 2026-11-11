@@ -1,16 +1,25 @@
 // Onboarding journeys for the Concentration game
 
-enum OnboardingJourney {
+enum OnboardingJourney: String, CaseIterable, Identifiable {
     case firstPlay
     case puzzleComplete
     case timeOut
     case firstMismatch
     case firstMatch
 
+    var id: String { rawValue }
+
+    var blocksGameInteraction: Bool { true }
+
     var features: [OBFeature] {
         switch self {
         case .firstPlay:
             [
+                OBFeature(
+                    title: "Hello! Welcome!",
+                    description: "Welcome to the game. Find pairs.",
+                    icon: "square.on.square"
+                ),
                 OBFeature(
                     title: "Find a Pair",
                     description: "Tap two cards to reveal them.",
@@ -18,7 +27,7 @@ enum OnboardingJourney {
                 ),
                 OBFeature(
                     title: "Watch the Clock",
-                    description: "The timer starts when you flip your first card.",
+                    description: "The timer starts when you flip your first card. Use Pause to take a break.",
                     icon: "timer"
                 ),
                 OBFeature(
@@ -31,8 +40,8 @@ enum OnboardingJourney {
         case .puzzleComplete:
             [
                 OBFeature(
-                    title: "Well Done!",
-                    description: "You matched every pair.",
+                    title: "Improve Your Score",
+                    description: "Find all the pairs faster to earn a larger time bonus.",
                     icon: "trophy"
                 )
             ]
@@ -41,23 +50,23 @@ enum OnboardingJourney {
             [
                 OBFeature(
                     title: "Time’s Up",
-                    description: "Remember the cards you’ve seen and try again.",
+                    description: "Remember the cards you've seen and try again.",
                     icon: "clock"
                 )
             ]
         case .firstMismatch:
             [
                 OBFeature(
-                    title: "Oops!",
-                    description: "That wasn't a match. Try to remember the cards.",
+                    title: "Remember the Cards",
+                    description: "Remember where these cards were for your next turn.",
                     icon: "xmark"
                 )
             ]
         case .firstMatch:
             [
                 OBFeature(
-                    title: "Great!",
-                    description: "You found a matching pair! Keep it up.",
+                    title: "You got a match!",
+                    description: "Matched cards stay face up. Now, find the remaining pairs.",
                     icon: "checkmark"
                 )
             ]

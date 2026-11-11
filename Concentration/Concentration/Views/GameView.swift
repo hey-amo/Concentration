@@ -2,14 +2,60 @@ import SwiftUI
 
 struct GameView: View {
     @AppStorage("appearanceMode") private var appearanceMode = AppAppearance.system.rawValue
-    @State private var gameState = GameState(eventObserver: HapticsController())
+    @State private var gameState: GameState
+    @State private var onboarding: OnboardingCoordinator
     @State private var showSettings = false
+    @State private var settingsVisible = false
     @State private var confirmNewGame = false
+    @State private var isManuallyPaused = false
     @State private var dealID = UUID()
     @State private var isDealComplete = false
     @State private var hasCompletedInitialDeal = false
+    @State private var footerAnimating = false
 
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AccessibilityFocusState private var gameFocused: Bool
+    @AccessibilityFocusState private var pauseFocused: Bool
+
+    init() {
+        let coordinator = OnboardingCoordinator(eventObserver: HapticsController())
+        _onboarding = State(initialValue: coordinator)
+        _gameState = State(initialValue: GameState(eventObserver: coordinator))
+    }
+
+    init(onboarding: OnboardingCoordinator, gameState: GameState) {
+        _onboarding = State(initialValue: onboarding)
+        _gameState = State(initialValue: gameState)
+    }
+
+    private struct PresentationState: Equatable {
+        let sceneActive: Bool
+        let animationsPlaying: Bool
+        let canPresent: Bool
+        let timerBlocked: Bool
+        let requestRevision: Int
+        let tipsEnabled: Bool
+    }
+
+    private var presentationState: PresentationState {
+        let animationsPlaying = !isDealComplete || footerAnimating || gameState.activeCardAnimations > 0
+        return PresentationState(
+            sceneActive: scenePhase == .active,
+            animationsPlaying: animationsPlaying,
+            canPresent: scenePhase == .active && !animationsPlaying
+                && !gameState.isResolvingTurn && !settingsVisible && !confirmNewGame
+                && !isManuallyPaused,
+            timerBlocked: scenePhase != .active || settingsVisible || confirmNewGame
+                || isManuallyPaused || onboardingBlocksInteraction,
+            requestRevision: onboarding.requestRevision,
+            tipsEnabled: onboarding.tipsEnabled
+        )
+    }
+
+    private var onboardingBlocksInteraction: Bool {
+        onboarding.activeJourney?.blocksGameInteraction == true
+    }
 
     var body: some View {
         ZStack {
@@ -24,7 +70,21 @@ struct GameView: View {
                 HStack {
                     GameScoreView(gameState: gameState)
                         .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityFocused($gameFocused)
                     GameTimerView(gameState: gameState)
+                    Button {
+                        gameState.pauseTimer()
+                        if !gameState.isGameOver {
+                            isManuallyPaused = true
+                        }
+                    } label: {
+                        Image(systemName: "pause.fill")
+                            .font(.headline)
+                            .padding(12)
+                    }
+                    .accessibilityLabel("Pause game")
+                    .disabled(!gameState.canPause || presentationState.animationsPlaying
+                        || settingsVisible || confirmNewGame || onboarding.activeJourney != nil)
                 }
                 .padding(.horizontal)
 
@@ -33,11 +93,10 @@ struct GameView: View {
                     isReady: isDealComplete,
                     onSelect: { cardID in
                         guard isDealComplete else { return }
-                        Task { await gameState.selectCard(cardID) }
+                        Task { await gameState.selectCard(cardID, animated: !reduceMotion) }
                     },
                     onDealComplete: {
-                        isDealComplete = true
-                        hasCompletedInitialDeal = true
+                        finishDeal()
                     }
                 )
                 .id(dealID)
@@ -47,20 +106,72 @@ struct GameView: View {
                     isDealComplete: isDealComplete,
                     hasCompletedInitialDeal: hasCompletedInitialDeal,
                     onNewGame: {
+                        gameState.pauseTimer()
                         confirmNewGame = true
                     },
                     onSettings: {
+                        gameState.pauseTimer()
+                        settingsVisible = true
                         showSettings = true
                     }
                 )
             }
             .padding(.vertical)
+            .allowsHitTesting(!onboardingBlocksInteraction && !isManuallyPaused)
+            .accessibilityHidden(onboardingBlocksInteraction || isManuallyPaused)
 
             GameResultOverlay(gameState: gameState, onPlayAgain: startNewGame)
+                .allowsHitTesting(!onboardingBlocksInteraction)
+                .accessibilityHidden(onboardingBlocksInteraction)
+
+            if isManuallyPaused {
+                Color.black
+                    .ignoresSafeArea()
+                    .accessibilityHidden(true)
+                VStack(spacing: 20) {
+                    Text("Game Paused")
+                        .font(.largeTitle.bold())
+                        .accessibilityAddTraits(.isHeader)
+                        .accessibilityFocused($pauseFocused)
+                    Button("Resume Game") {
+                        isManuallyPaused = false
+                        gameFocused = true
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                .foregroundStyle(.white)
+                .onAppear { pauseFocused = true }
+            }
+
+            if let journey = onboarding.activeJourney {
+                if journey.blocksGameInteraction {
+                    Color.black.opacity(0.45)
+                        .ignoresSafeArea()
+                        .accessibilityHidden(true)
+
+                    GeometryReader { geometry in
+                        ScrollView {
+                            tipCard(journey)
+                                .frame(maxWidth: .infinity)
+                                .frame(minHeight: geometry.size.height)
+                        }
+                    }
+                    .zIndex(1)
+                } else {
+                    VStack {
+                        tipCard(journey)
+                        Spacer()
+                    }
+                    .zIndex(1)
+                }
+            }
         }
         .preferredColorScheme(AppAppearance(rawValue: appearanceMode)?.colorScheme)
-        .sheet(isPresented: $showSettings) {
-            SettingsView()
+        .sheet(isPresented: $showSettings, onDismiss: { settingsVisible = false }) {
+            SettingsView(onboarding: onboarding) {
+                onboarding.replayIntroduction()
+                showSettings = false
+            }
         }
         .alert("Start a New Game?", isPresented: $confirmNewGame) {
             Button("Start New Game", role: .destructive, action: startNewGame)
@@ -68,22 +179,67 @@ struct GameView: View {
         } message: {
             Text("Your current game progress will be lost.")
         }
-        .onChange(of: scenePhase) { _, newPhase in
-            switch newPhase {
-            case .background, .inactive:
-                gameState.pauseTimer()
-            case .active:
-                gameState.resumeTimer()
-            @unknown default:
+        .task(id: presentationState) {
+            reconcilePresentation()
+        }
+    }
+
+    private func tipCard(_ journey: OnboardingJourney) -> some View {
+        OnboardingView(
+            appName: "Concentration",
+            features: journey.features,
+            onFinish: {
+                onboarding.finishJourney()
+                if journey.blocksGameInteraction {
+                    gameFocused = true
+                }
+            }
+        )
+        .padding()
+        .id(journey)
+    }
+
+    private func reconcilePresentation() {
+        let animationsPlaying = !isDealComplete || footerAnimating || gameState.activeCardAnimations > 0
+        if animationsPlaying {
+            onboarding.suspendForAnimation()
+        }
+        let canPresent = presentationState.canPresent
+        if canPresent && onboarding.activeJourney == nil && !onboarding.pendingJourneys.isEmpty {
+            if onboarding.pendingJourneys.first?.blocksGameInteraction == true {
                 gameState.pauseTimer()
             }
+            onboarding.presentIfPossible(true)
+        }
+        if !presentationState.timerBlocked {
+            gameState.resumeTimer()
+        } else {
+            gameState.pauseTimer()
+        }
+    }
+
+    private func finishDeal() {
+        onboarding.dealCompleted()
+        guard !reduceMotion else {
+            isDealComplete = true
+            hasCompletedInitialDeal = true
+            return
+        }
+        footerAnimating = true
+        withAnimation(.easeInOut(duration: 0.2), completionCriteria: .removed) {
+            isDealComplete = true
+            hasCompletedInitialDeal = true
+        } completion: {
+            footerAnimating = false
         }
     }
 
     private func startNewGame() {
         guard isDealComplete else { return }
+        onboarding.newGame()
         isDealComplete = false
         gameState.setupNewGame()
+        isManuallyPaused = false
         dealID = UUID()
     }
 }
@@ -155,6 +311,7 @@ private struct GameTimerView: View {
                 .font(.title2)
                 .bold()
                 .foregroundStyle(gameState.timeRemaining <= 10 ? .red : .primary)
+                .accessibilityIdentifier("game-timer")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)

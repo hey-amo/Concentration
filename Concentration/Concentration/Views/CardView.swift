@@ -60,7 +60,6 @@ struct CardView: View {
                 axis: (x: 0, y: 1, z: 0)
             )
             .scaleEffect(isPressed ? 0.95 : 1.0)
-            .animation(.spring(duration: 0.6), value: card.isFaceUp)
             .animation(.easeInOut(duration: 0.1), value: isPressed)
         }
         .buttonStyle(.plain)

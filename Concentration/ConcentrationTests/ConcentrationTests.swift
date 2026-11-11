@@ -96,6 +96,28 @@ final class ConcentrationTests: XCTestCase {
         XCTAssertEqual(game.flips, 2)
     }
 
+    func testPauseIsUnavailableBeforeStartingAndDuringTurnResolution() async {
+        let (game, firstPair, secondPair) = makeGame(
+            turnResolutionDelay: .milliseconds(100)
+        )
+        XCTAssertFalse(game.canPause)
+        await game.selectCard(firstPair[0].id, animated: false)
+        XCTAssertTrue(game.canPause)
+
+        let secondSelection = Task { @MainActor in
+            await game.selectCard(secondPair[0].id, animated: false)
+        }
+        while !game.isResolvingTurn {
+            await Task.yield()
+        }
+        XCTAssertFalse(game.canPause)
+        await secondSelection.value
+        XCTAssertTrue(game.canPause)
+
+        game.setupNewGame()
+        XCTAssertFalse(game.canPause)
+    }
+
     func testStartingNewGameDuringResolutionIgnoresTheOldTurn() async throws {
         let (game, firstPair, secondPair) = makeGame(
             turnResolutionDelay: .milliseconds(100)
