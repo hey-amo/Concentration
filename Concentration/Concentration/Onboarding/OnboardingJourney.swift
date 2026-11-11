@@ -4,6 +4,8 @@ enum OnboardingJourney {
     case firstPlay
     case puzzleComplete
     case timeOut
+    case firstMismatch
+    case firstMatch
 
     var features: [OBFeature] {
         switch self {
@@ -41,6 +43,22 @@ enum OnboardingJourney {
                     title: "Time’s Up",
                     description: "Remember the cards you’ve seen and try again.",
                     icon: "clock"
+                )
+            ]
+        case .firstMismatch:
+            [
+                OBFeature(
+                    title: "Oops!",
+                    description: "That wasn't a match. Try to remember the cards.",
+                    icon: "xmark"
+                )
+            ]
+        case .firstMatch:
+            [
+                OBFeature(
+                    title: "Great!",
+                    description: "You found a matching pair! Keep it up.",
+                    icon: "checkmark"
                 )
             ]
         }
