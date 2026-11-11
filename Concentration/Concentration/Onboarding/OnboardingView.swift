@@ -5,6 +5,7 @@ struct OnboardingView: View {
     let features: [OBFeature]
     let color: Color
     var onFinish: () -> Void
+    var onShowTip: () -> Void
 
     @State private var currentStep = 0
 
@@ -12,12 +13,14 @@ struct OnboardingView: View {
         appName: String,
         features: [OBFeature],
         color: Color = .blue,
-        onFinish: @escaping () -> Void = {}
+        onFinish: @escaping () -> Void = {},
+        onShowTip: @escaping () -> Void = { AudioManager.shared.play(.tipNotification) }
     ) {
         self.appName = appName
         self.features = features
         self.color = color
         self.onFinish = onFinish
+        self.onShowTip = onShowTip
     }
 
     var body: some View {
@@ -76,13 +79,19 @@ struct OnboardingView: View {
         .padding(20)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20))
         .frame(maxWidth: 380)
+        .onChange(of: currentStep, initial: true) {
+            if features.indices.contains(currentStep) {
+                onShowTip()
+            }
+        }
     }
 }
 
 #Preview("First play") {
     OnboardingView(
         appName: "Concentration",
-        features: OnboardingJourney.firstPlay.features
+        features: OnboardingJourney.firstPlay.features,
+        onShowTip: {}
     )
     .padding()
 }
@@ -90,7 +99,8 @@ struct OnboardingView: View {
 #Preview("Puzzle complete") {
     OnboardingView(
         appName: "Concentration",
-        features: OnboardingJourney.puzzleComplete.features
+        features: OnboardingJourney.puzzleComplete.features,
+        onShowTip: {}
     )
     .padding()
 }
@@ -98,7 +108,8 @@ struct OnboardingView: View {
 #Preview("Time out") {
     OnboardingView(
         appName: "Concentration",
-        features: OnboardingJourney.timeOut.features
+        features: OnboardingJourney.timeOut.features,
+        onShowTip: {}
     )
     .padding()
 }

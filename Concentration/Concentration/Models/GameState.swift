@@ -9,7 +9,7 @@ import Foundation
 import Observation
 
 enum SoundEffect {
-    case cardFlip, match, noMatch, win, lose
+    case cardFlip, match, noMatch, win, lose, tipNotification
 }
 
 enum GameEvent: Equatable {

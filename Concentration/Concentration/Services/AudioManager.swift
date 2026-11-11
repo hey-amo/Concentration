@@ -49,6 +49,7 @@ final class AudioManager {
         case .noMatch: ([220], 0.14)
         case .win: ([523, 659, 784], 0.4)
         case .lose: ([330, 220], 0.35)
+        case .tipNotification: ([784, 1047], 0.2)
         }
 
         do {
