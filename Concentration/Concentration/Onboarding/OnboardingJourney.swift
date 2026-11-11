@@ -27,7 +27,7 @@ enum OnboardingJourney: String, CaseIterable, Identifiable {
                 ),
                 OBFeature(
                     title: "Watch the Clock",
-                    description: "The timer starts when you flip your first card.",
+                    description: "The timer starts when you flip your first card. Use Pause to take a break.",
                     icon: "timer"
                 ),
                 OBFeature(

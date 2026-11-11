@@ -78,6 +78,10 @@ final class GameState {
     private(set) var isResolvingTurn = false
     private(set) var activeCardAnimations = 0
 
+    var canPause: Bool {
+        timerStarted && !isGameOver && !isResolvingTurn && activeCardAnimations == 0
+    }
+
     let timeLimit: Int
 
     @ObservationIgnored private var selectedCardIDs: [UUID] = []

@@ -22,6 +22,7 @@ final class GameBoardAnimationTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(200))
         await game.selectCard(game.cards[0].id)
         XCTAssertGreaterThan(game.activeCardAnimations, 0)
+        XCTAssertFalse(game.canPause)
         try await Task.sleep(for: .milliseconds(100))
         XCTAssertGreaterThan(game.activeCardAnimations, 0)
         let deadline = ContinuousClock.now + .seconds(5)
@@ -29,6 +30,7 @@ final class GameBoardAnimationTests: XCTestCase {
             try await Task.sleep(for: .milliseconds(50))
         }
         XCTAssertEqual(game.activeCardAnimations, 0)
+        XCTAssertTrue(game.canPause)
     }
 
     func testDealCompletionWaitsForStaggeredCardAnimations() async throws {
