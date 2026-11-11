@@ -42,6 +42,7 @@ final class ConcentrationUITests: XCTestCase {
         wait(for: [ready], timeout: 10)
         firstCard.tap()
         XCTAssertTrue(app.staticTexts["Flips: 1"].waitForExistence(timeout: 2))
+        let footerFrame = app.buttons["New Game"].frame
         app.buttons["Settings"].tap()
         app.buttons["Done"].tap()
         XCTAssertTrue(app.staticTexts["Flips: 1"].exists)
@@ -56,8 +57,22 @@ final class ConcentrationUITests: XCTestCase {
 
         app.buttons["New Game"].tap()
         alert.buttons["Start New Game"].tap()
+        XCTAssertFalse(app.buttons["New Game"].isHittable)
+        XCTAssertFalse(app.buttons["Settings"].isHittable)
+        XCTAssertFalse(app.buttons["card-0"].isHittable)
         XCTAssertTrue(app.staticTexts["Flips: 0"].waitForExistence(timeout: 2))
         XCTAssertTrue(app.staticTexts["Score: 0"].exists)
+        let newGameButton = app.buttons["New Game"]
+        let newGameReady = expectation(
+            for: NSPredicate(format: "isHittable == true"),
+            evaluatedWith: newGameButton
+        )
+        wait(for: [newGameReady], timeout: 10)
+        XCTAssertEqual(newGameButton.frame.minY, footerFrame.minY, accuracy: 1)
+        XCTAssertTrue(app.buttons["Settings"].isHittable)
+        XCTAssertTrue(app.buttons["card-0"].isHittable)
+        app.buttons["card-0"].tap()
+        XCTAssertTrue(app.staticTexts["Flips: 1"].waitForExistence(timeout: 2))
     }
 
     @MainActor

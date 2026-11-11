@@ -6,8 +6,11 @@ struct GameView: View {
     @State private var showSettings = false
     @State private var confirmNewGame = false
     @State private var dealID = UUID()
+    @State private var isDealComplete = false
+    @State private var hasCompletedInitialDeal = false
 
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
@@ -26,9 +29,18 @@ struct GameView: View {
                 }
                 .padding(.horizontal)
 
-                GameBoardView(cards: gameState.cards) { cardID in
-                    Task { await gameState.selectCard(cardID) }
-                }
+                GameBoardView(
+                    cards: gameState.cards,
+                    isReady: isDealComplete,
+                    onSelect: { cardID in
+                        guard isDealComplete else { return }
+                        Task { await gameState.selectCard(cardID) }
+                    },
+                    onDealComplete: {
+                        isDealComplete = true
+                        hasCompletedInitialDeal = true
+                    }
+                )
                 .id(dealID)
 
                 HStack(spacing: 20) {
@@ -43,6 +55,7 @@ struct GameView: View {
                             .foregroundStyle(.white)
                             .clipShape(RoundedRectangle(cornerRadius: 12))
                     }
+                    .accessibilityHidden(!isDealComplete)
 
                     Button {
                         showSettings = true
@@ -54,8 +67,13 @@ struct GameView: View {
                             .background(.gray.opacity(0.2))
                             .clipShape(RoundedRectangle(cornerRadius: 12))
                     }
+                    .accessibilityHidden(!isDealComplete)
                 }
                 .padding(.horizontal)
+                .disabled(!isDealComplete)
+                .opacity(isDealComplete ? 1 : (hasCompletedInitialDeal ? 0.2 : 0))
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: isDealComplete)
+                .accessibilityHidden(!isDealComplete)
             }
             .padding(.vertical)
 
@@ -84,6 +102,8 @@ struct GameView: View {
     }
 
     private func startNewGame() {
+        guard isDealComplete else { return }
+        isDealComplete = false
         gameState.setupNewGame()
         dealID = UUID()
     }

@@ -1,5 +1,7 @@
 import Foundation
 
+// Onboarding feature struct
+
 struct OBFeature: Identifiable {
     let id: UUID
     let title: String
